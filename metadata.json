@@ -1,5 +1,6 @@
 {
   "name": "Portfolio Tracker 1 Tháng",
   "description": "Một ứng dụng để theo dõi portfolio crypto trong một tháng, bao gồm các giải thưởng alpha và sự kiện giao dịch.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [],
+  "prompt": ""
 }

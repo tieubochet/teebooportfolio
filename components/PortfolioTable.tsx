@@ -51,7 +51,7 @@ const PortfolioTable = <T extends { id: string }>({ items, columns, onDeleteItem
                 <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                         {onUpdateItem && (
-                             <button 
+                            <button 
                                 onClick={() => onUpdateItem(item.id)}
                                 className="text-blue-400 hover:text-blue-300 transition-colors p-1 rounded-full hover:bg-blue-500/10"
                                 aria-label="Update item"

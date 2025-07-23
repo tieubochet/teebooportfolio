@@ -7,6 +7,7 @@ import PlusIcon from './components/icons/PlusIcon';
 import TrashIcon from './components/icons/TrashIcon';
 import AuthScreen from './components/AuthScreen';
 import LogoutIcon from './components/icons/LogoutIcon';
+import ShareIcon from './components/icons/ShareIcon';
 
 const USER_STORAGE_KEY = 'portfolio-tracker-users';
 const PASSWORD_KEY = 'portfolio-tracker-password';
@@ -37,26 +38,47 @@ const App: React.FC = () => {
     const [users, setUsers] = useState<User[]>([]);
     const [activeUserId, setActiveUserId] = useState<string | null>(null);
 
-    // Check for password on initial load
+    // Load password and initial data on load
     useEffect(() => {
+        // First, check for password hash
         const storedHash = localStorage.getItem(PASSWORD_KEY);
         setPasswordHash(storedHash);
-    }, []);
 
-    // Load users from localStorage once authenticated
-    useEffect(() => {
-        if (!isAuthenticated) return;
+        // Then, check for data in URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const data = urlParams.get('data');
+        if (data) {
+            try {
+                const decodedUsers = JSON.parse(atob(data)) as User[];
+                // Basic validation
+                if (Array.isArray(decodedUsers)) {
+                    setUsers(decodedUsers);
+                    if (decodedUsers.length > 0) {
+                        setActiveUserId(decodedUsers[0].id);
+                    }
+                    // Import data from URL into local storage for persistence on this device
+                    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(decodedUsers));
+                    
+                    // Clean the URL to avoid reloading data on refresh
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    return; // Data loaded from URL, skip localStorage loading
+                }
+            } catch (error) {
+                console.error("Failed to load data from URL.", error);
+            }
+        }
+
+        // If no URL data, load from localStorage
         try {
             const storedUsers = localStorage.getItem(USER_STORAGE_KEY);
             if (storedUsers) {
                 const parsedUsers = JSON.parse(storedUsers);
                 setUsers(parsedUsers);
-                // Set the first user as active if none is selected
                 if (parsedUsers.length > 0) {
                     setActiveUserId(parsedUsers[0].id);
                 }
             } else {
-                 // Create a default user if no data exists after setting password
+                // If nothing is stored, create a default user
                 const defaultUser: User = {
                     id: `user${Date.now()}`,
                     name: 'My Portfolio',
@@ -68,16 +90,15 @@ const App: React.FC = () => {
             }
         } catch (error) {
             console.error("Failed to parse users from localStorage", error);
-            setUsers([]); // Reset to empty array on error
+            setUsers([]);
         }
-    }, [isAuthenticated]);
+    }, []);
 
     // Save users to localStorage whenever they change
     useEffect(() => {
+        // Don't save empty user array on initial load before auth
         if (!isAuthenticated) return;
-        if (users.length > 0 || localStorage.getItem(USER_STORAGE_KEY)) {
-             localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(users));
-        }
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(users));
     }, [users, isAuthenticated]);
     
     // Modal states
@@ -85,6 +106,7 @@ const App: React.FC = () => {
     const [isAddTradeModalOpen, setAddTradeModalOpen] = useState(false);
     const [isUpdateTradeModalOpen, setUpdateTradeModalOpen] = useState(false);
     const [isUserModalOpen, setUserModalOpen] = useState(false);
+    const [isShareModalOpen, setShareModalOpen] = useState(false);
 
     // Form states
     const [newReward, setNewReward] = useState({ tokenName: '', quantity: '', value: '' });
@@ -92,6 +114,8 @@ const App: React.FC = () => {
     const [dailyEntry, setDailyEntry] = useState({ volume: '', fee: '' });
     const [currentTradeEventId, setCurrentTradeEventId] = useState<string | null>(null);
     const [newUserName, setNewUserName] = useState('');
+    const [shareableLink, setShareableLink] = useState('');
+    const [copySuccess, setCopySuccess] = useState('');
 
     const activeUser = useMemo(() => users.find(u => u.id === activeUserId), [users, activeUserId]);
 
@@ -195,10 +219,25 @@ const App: React.FC = () => {
     const handleDeleteCurrentUser = () => {
         if (!activeUserId || !window.confirm(`Bạn có chắc chắn muốn xóa người dùng "${activeUser?.name}" và tất cả dữ liệu của họ không?`)) return;
         setUsers(prev => prev.filter(user => user.id !== activeUserId));
-        // Select another user or set to null if no users are left
-        setActiveUserId(prev => {
-            const remainingUsers = users.filter(user => user.id !== activeUserId);
-            return remainingUsers.length > 0 ? remainingUsers[0].id : null;
+        
+        const remainingUsers = users.filter(user => user.id !== activeUserId);
+        setActiveUserId(remainingUsers.length > 0 ? remainingUsers[0].id : null);
+    };
+
+    const handleGenerateShareLink = () => {
+        if (users.length === 0) return;
+        const encodedData = btoa(JSON.stringify(users));
+        const url = `${window.location.origin}${window.location.pathname}?data=${encodedData}`;
+        setShareableLink(url);
+        setShareModalOpen(true);
+    };
+    
+    const copyToClipboard = () => {
+        navigator.clipboard.writeText(shareableLink).then(() => {
+            setCopySuccess('Copied!');
+            setTimeout(() => setCopySuccess(''), 2000);
+        }, () => {
+            setCopySuccess('Failed');
         });
     };
 
@@ -271,9 +310,14 @@ const App: React.FC = () => {
                                 <PlusIcon className="w-5 h-5" /> Thêm User
                             </button>
                             {activeUserId && (
-                                <button onClick={handleDeleteCurrentUser} className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-4 rounded-lg transition-colors">
-                                    <TrashIcon className="w-5 h-5"/> Xóa User
-                                </button>
+                                <>
+                                    <button onClick={handleDeleteCurrentUser} className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-4 rounded-lg transition-colors">
+                                        <TrashIcon className="w-5 h-5"/> Xóa User
+                                    </button>
+                                    <button onClick={handleGenerateShareLink} className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 px-4 rounded-lg transition-colors">
+                                        <ShareIcon className="w-5 h-5"/> Lưu & Di chuyển
+                                    </button>
+                                </>
                             )}
                             <button onClick={handleLogout} className="flex items-center gap-2 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2.5 px-4 rounded-lg transition-colors ml-auto">
                                 <LogoutIcon className="w-5 h-5"/> Đăng xuất
@@ -283,7 +327,9 @@ const App: React.FC = () => {
                    
                     {activeUser && (
                          <div className="mt-6 border-t border-gray-700 pt-4">
-                            <p className="text-lg text-gray-400">Tổng giá trị portfolio của {activeUser.name}:</p>
+                            <p className="text-lg text-gray-400">
+                                {`Tổng giá trị portfolio của ${activeUser.name}:`}
+                            </p>
                             <p className="text-4xl font-extrabold text-green-400 tracking-tight">{formatCurrency(totalValue)}</p>
                         </div>
                     )}
@@ -321,6 +367,27 @@ const App: React.FC = () => {
                 </main>
 
                 {/* Modals */}
+                <Modal isOpen={isShareModalOpen} onClose={() => { setShareModalOpen(false); setCopySuccess(''); }} title="Lưu & Di chuyển Dữ liệu">
+                    <div className="space-y-4">
+                        <p className="text-sm text-gray-400">Sao chép và sử dụng liên kết này để truy cập và chỉnh sửa dữ liệu của bạn trên một thiết bị khác. Liên kết này chứa toàn bộ dữ liệu hiện tại của bạn.</p>
+                        <div className="relative">
+                            <input 
+                                type="text" 
+                                value={shareableLink} 
+                                readOnly 
+                                className="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded-lg block w-full p-2.5 pr-20"
+                                onFocus={(e) => e.target.select()}
+                            />
+                            <button 
+                                onClick={copyToClipboard}
+                                className="absolute top-1/2 right-1.5 -translate-y-1/2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 px-3 rounded-md text-sm w-[60px] text-center"
+                            >
+                                {copySuccess || 'Copy'}
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
+
                 <Modal isOpen={isUserModalOpen} onClose={() => setUserModalOpen(false)} title="Thêm người dùng mới">
                      <form onSubmit={handleAddNewUser} className="space-y-4">
                         <InputField label="Tên người dùng" id="user-name" type="text" value={newUserName} onChange={e => setNewUserName(e.target.value)} required autoFocus placeholder="Ví dụ: John Doe"/>
