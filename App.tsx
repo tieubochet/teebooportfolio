@@ -1,16 +1,12 @@
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { AlphaReward, TradeEvent, User } from './types';
 import Modal from './components/Modal';
 import PortfolioTable from './components/PortfolioTable';
 import PlusIcon from './components/icons/PlusIcon';
 import TrashIcon from './components/icons/TrashIcon';
-import AuthScreen from './components/AuthScreen';
-import LogoutIcon from './components/icons/LogoutIcon';
 import ShareIcon from './components/icons/ShareIcon';
 
 const USER_STORAGE_KEY = 'portfolio-tracker-users';
-const PASSWORD_KEY = 'portfolio-tracker-password';
 
 // Helper to format currency
 const formatCurrency = (value: number) => {
@@ -30,76 +26,66 @@ const InputField: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label
 );
 
 const App: React.FC = () => {
-    // Auth state
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [passwordHash, setPasswordHash] = useState<string | null | undefined>(undefined); // undefined: not checked, null: not set, string: set
-
-    // App Data State
+    // App State
+    const [isLoading, setIsLoading] = useState(true);
     const [users, setUsers] = useState<User[]>([]);
     const [activeUserId, setActiveUserId] = useState<string | null>(null);
 
-    // Load password and initial data on load
+    // Load initial data from URL or localStorage
     useEffect(() => {
-        // First, check for password hash
-        const storedHash = localStorage.getItem(PASSWORD_KEY);
-        setPasswordHash(storedHash);
-
-        // Then, check for data in URL
         const urlParams = new URLSearchParams(window.location.search);
         const data = urlParams.get('data');
+        let initialUsers: User[] = [];
+
         if (data) {
             try {
                 const decodedUsers = JSON.parse(atob(data)) as User[];
-                // Basic validation
-                if (Array.isArray(decodedUsers)) {
-                    setUsers(decodedUsers);
-                    if (decodedUsers.length > 0) {
-                        setActiveUserId(decodedUsers[0].id);
-                    }
-                    // Import data from URL into local storage for persistence on this device
+                if (Array.isArray(decodedUsers) && decodedUsers.length > 0) {
+                    initialUsers = decodedUsers;
+                    // Persist imported data to localStorage
                     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(decodedUsers));
-                    
-                    // Clean the URL to avoid reloading data on refresh
-                    window.history.replaceState({}, document.title, window.location.pathname);
-                    return; // Data loaded from URL, skip localStorage loading
                 }
+                // Clean the URL to avoid reloading data on refresh
+                window.history.replaceState({}, document.title, window.location.pathname);
             } catch (error) {
                 console.error("Failed to load data from URL.", error);
             }
         }
-
-        // If no URL data, load from localStorage
-        try {
-            const storedUsers = localStorage.getItem(USER_STORAGE_KEY);
-            if (storedUsers) {
-                const parsedUsers = JSON.parse(storedUsers);
-                setUsers(parsedUsers);
-                if (parsedUsers.length > 0) {
-                    setActiveUserId(parsedUsers[0].id);
+        
+        // If no data from URL, try localStorage
+        if (initialUsers.length === 0) {
+            try {
+                const storedUsers = localStorage.getItem(USER_STORAGE_KEY);
+                if (storedUsers) {
+                    initialUsers = JSON.parse(storedUsers);
                 }
-            } else {
-                // If nothing is stored, create a default user
-                const defaultUser: User = {
-                    id: `user${Date.now()}`,
-                    name: 'My Portfolio',
-                    alphaRewards: [],
-                    tradeEvents: [],
-                };
-                setUsers([defaultUser]);
-                setActiveUserId(defaultUser.id);
+            } catch (error) {
+                console.error("Failed to parse users from localStorage", error);
             }
-        } catch (error) {
-            console.error("Failed to parse users from localStorage", error);
-            setUsers([]);
         }
+
+        // If still no data, create a default user
+        if (initialUsers.length === 0) {
+             const defaultUser: User = {
+                id: `user${Date.now()}`,
+                name: 'Thống kê',
+                alphaRewards: [],
+                tradeEvents: [],
+            };
+            initialUsers = [defaultUser];
+        }
+
+        setUsers(initialUsers);
+        setActiveUserId(initialUsers.length > 0 ? initialUsers[0].id : null);
+        setIsLoading(false);
     }, []);
 
     // Save users to localStorage whenever they change
     useEffect(() => {
-        // Don't save empty user array on initial load before auth
-        if (!isAuthenticated) return;
-        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(users));
-    }, [users, isAuthenticated]);
+        if (!isLoading) {
+           localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(users));
+        }
+    }, [users, isLoading]);
     
     // Modal states
     const [isRewardModalOpen, setRewardModalOpen] = useState(false);
@@ -218,9 +204,9 @@ const App: React.FC = () => {
 
     const handleDeleteCurrentUser = () => {
         if (!activeUserId || !window.confirm(`Bạn có chắc chắn muốn xóa người dùng "${activeUser?.name}" và tất cả dữ liệu của họ không?`)) return;
-        setUsers(prev => prev.filter(user => user.id !== activeUserId));
         
         const remainingUsers = users.filter(user => user.id !== activeUserId);
+        setUsers(remainingUsers);
         setActiveUserId(remainingUsers.length > 0 ? remainingUsers[0].id : null);
     };
 
@@ -234,10 +220,10 @@ const App: React.FC = () => {
     
     const copyToClipboard = () => {
         navigator.clipboard.writeText(shareableLink).then(() => {
-            setCopySuccess('Copied!');
+            setCopySuccess('Đã chép!');
             setTimeout(() => setCopySuccess(''), 2000);
         }, () => {
-            setCopySuccess('Failed');
+            setCopySuccess('Lỗi');
         });
     };
 
@@ -259,30 +245,12 @@ const App: React.FC = () => {
         return activeUser?.tradeEvents.find(event => event.id === currentTradeEventId);
     }, [currentTradeEventId, activeUser]);
     
-    const handlePasswordSet = (newHash: string) => {
-        localStorage.setItem(PASSWORD_KEY, newHash);
-        setPasswordHash(newHash);
-        setIsAuthenticated(true);
-    };
-
-    const handleLogout = () => {
-        setIsAuthenticated(false);
-    };
-
-    if (passwordHash === undefined) {
+    if (isLoading) {
         return (
             <div className="min-h-screen bg-gray-900 flex justify-center items-center">
                 <p className="text-white text-lg animate-pulse">Đang tải ứng dụng...</p>
             </div>
         );
-    }
-    
-    if (!isAuthenticated) {
-        return <AuthScreen 
-            passwordHash={passwordHash} 
-            onAuthSuccess={() => setIsAuthenticated(true)} 
-            onPasswordSet={handlePasswordSet} 
-        />;
     }
 
     return (
@@ -294,41 +262,37 @@ const App: React.FC = () => {
                     <div className="mt-6 border-t border-gray-700 pt-4">
                         <h2 className="text-lg font-semibold text-white mb-3">Quản lý Portfolio</h2>
                         <div className="flex flex-wrap items-center gap-3">
-                            <label htmlFor="user-select" className="sr-only">Người dùng hiện tại:</label>
+                            <label htmlFor="user-select" className="sr-only">Portfolio hiện tại:</label>
                             <select 
                                 id="user-select" 
                                 value={activeUserId || ''} 
                                 onChange={(e) => setActiveUserId(e.target.value)}
                                 className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 min-w-[180px]"
                             >
-                                <option value="" disabled>-- Chọn người dùng --</option>
                                 {users.map(user => (
                                     <option key={user.id} value={user.id}>{user.name}</option>
                                 ))}
                             </select>
                             <button onClick={() => setUserModalOpen(true)} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-lg transition-colors">
-                                <PlusIcon className="w-5 h-5" /> Thêm User
+                                <PlusIcon className="w-5 h-5" /> Thêm Portfolio
                             </button>
                             {activeUserId && (
                                 <>
                                     <button onClick={handleDeleteCurrentUser} className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-4 rounded-lg transition-colors">
-                                        <TrashIcon className="w-5 h-5"/> Xóa User
+                                        <TrashIcon className="w-5 h-5"/> Xóa Portfolio
                                     </button>
                                     <button onClick={handleGenerateShareLink} className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 px-4 rounded-lg transition-colors">
                                         <ShareIcon className="w-5 h-5"/> Lưu & Di chuyển
                                     </button>
                                 </>
                             )}
-                            <button onClick={handleLogout} className="flex items-center gap-2 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2.5 px-4 rounded-lg transition-colors ml-auto">
-                                <LogoutIcon className="w-5 h-5"/> Đăng xuất
-                            </button>
                         </div>
                     </div>
                    
                     {activeUser && (
                          <div className="mt-6 border-t border-gray-700 pt-4">
                             <p className="text-lg text-gray-400">
-                                {`Tổng giá trị portfolio của ${activeUser.name}:`}
+                                {`Tổng giá trị của "${activeUser.name}":`}
                             </p>
                             <p className="text-4xl font-extrabold text-green-400 tracking-tight">{formatCurrency(totalValue)}</p>
                         </div>
@@ -339,7 +303,7 @@ const App: React.FC = () => {
                     {!activeUser ? (
                          <div className="text-center py-16 px-6 bg-gray-800 rounded-xl border border-gray-700">
                             <h2 className="text-2xl font-semibold text-white">Chào mừng bạn!</h2>
-                            <p className="mt-2 text-gray-400">Vui lòng chọn một người dùng từ menu trên hoặc thêm người dùng mới để bắt đầu.</p>
+                            <p className="mt-2 text-gray-400">Vui lòng chọn một portfolio từ menu trên hoặc thêm mới để bắt đầu.</p>
                         </div>
                     ) : (
                     <>
@@ -375,23 +339,23 @@ const App: React.FC = () => {
                                 type="text" 
                                 value={shareableLink} 
                                 readOnly 
-                                className="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded-lg block w-full p-2.5 pr-20"
+                                className="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded-lg block w-full p-2.5 pr-24"
                                 onFocus={(e) => e.target.select()}
                             />
                             <button 
                                 onClick={copyToClipboard}
-                                className="absolute top-1/2 right-1.5 -translate-y-1/2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 px-3 rounded-md text-sm w-[60px] text-center"
+                                className="absolute top-1/2 right-1.5 -translate-y-1/2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 px-3 rounded-md text-sm w-[80px] text-center"
                             >
-                                {copySuccess || 'Copy'}
+                                {copySuccess || 'Sao chép'}
                             </button>
                         </div>
                     </div>
                 </Modal>
 
-                <Modal isOpen={isUserModalOpen} onClose={() => setUserModalOpen(false)} title="Thêm người dùng mới">
+                <Modal isOpen={isUserModalOpen} onClose={() => setUserModalOpen(false)} title="Thêm Portfolio mới">
                      <form onSubmit={handleAddNewUser} className="space-y-4">
-                        <InputField label="Tên người dùng" id="user-name" type="text" value={newUserName} onChange={e => setNewUserName(e.target.value)} required autoFocus placeholder="Ví dụ: John Doe"/>
-                        <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-lg transition">Thêm người dùng</button>
+                        <InputField label="Tên Portfolio" id="user-name" type="text" value={newUserName} onChange={e => setNewUserName(e.target.value)} required autoFocus placeholder="Ví dụ: Airdrop tháng 7"/>
+                        <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-lg transition">Thêm Portfolio</button>
                     </form>
                 </Modal>
 
