@@ -39,7 +39,8 @@ const App: React.FC = () => {
 
         if (data) {
             try {
-                const decodedUsers = JSON.parse(atob(data)) as User[];
+                // Safely decode from Base64, supporting Unicode characters.
+                const decodedUsers = JSON.parse(decodeURIComponent(atob(data))) as User[];
                 if (Array.isArray(decodedUsers) && decodedUsers.length > 0) {
                     initialUsers = decodedUsers;
                     // Persist imported data to localStorage
@@ -68,7 +69,7 @@ const App: React.FC = () => {
         if (initialUsers.length === 0) {
              const defaultUser: User = {
                 id: `user${Date.now()}`,
-                name: 'Thống kê',
+                name: 'My Portfolio',
                 alphaRewards: [],
                 tradeEvents: [],
             };
@@ -212,7 +213,8 @@ const App: React.FC = () => {
 
     const handleGenerateShareLink = () => {
         if (users.length === 0) return;
-        const encodedData = btoa(JSON.stringify(users));
+        // Safely encode to Base64, supporting Unicode characters from user input.
+        const encodedData = btoa(encodeURIComponent(JSON.stringify(users)));
         const url = `${window.location.origin}${window.location.pathname}?data=${encodedData}`;
         setShareableLink(url);
         setShareModalOpen(true);
