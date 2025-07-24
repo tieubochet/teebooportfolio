@@ -1,10 +1,13 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import * as htmlToImage from 'html-to-image';
 import { AlphaReward, TradeEvent, User } from './types';
 import Modal from './components/Modal';
 import PortfolioTable from './components/PortfolioTable';
 import PlusIcon from './components/icons/PlusIcon';
 import TrashIcon from './components/icons/TrashIcon';
 import ShareIcon from './components/icons/ShareIcon';
+import CameraIcon from './components/icons/CameraIcon';
+import Snapshot from './components/Snapshot';
 
 const USER_STORAGE_KEY = 'portfolio-tracker-users';
 
@@ -30,6 +33,8 @@ const App: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [users, setUsers] = useState<User[]>([]);
     const [activeUserId, setActiveUserId] = useState<string | null>(null);
+    const [isSnapshotting, setIsSnapshotting] = useState(false);
+    const snapshotRef = useRef<HTMLDivElement>(null);
 
     // Load initial data from URL or localStorage
     useEffect(() => {
@@ -39,21 +44,20 @@ const App: React.FC = () => {
 
         if (data) {
             try {
-                // Safely decode from Base64, supporting Unicode characters.
-                const decodedUsers = JSON.parse(decodeURIComponent(atob(data))) as User[];
-                if (Array.isArray(decodedUsers) && decodedUsers.length > 0) {
-                    initialUsers = decodedUsers;
-                    // Persist imported data to localStorage
-                    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(decodedUsers));
+                const textDecoder = new TextDecoder('utf-8');
+                const decodedData = atob(data).split('').map(c => `%${('00' + c.charCodeAt(0).toString(16)).slice(-2)}`).join('');
+                const decodedString = decodeURIComponent(decodedData);
+                const parsedUsers = JSON.parse(decodedString) as User[];
+                if (Array.isArray(parsedUsers) && parsedUsers.length > 0) {
+                    initialUsers = parsedUsers;
+                    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(initialUsers));
                 }
-                // Clean the URL to avoid reloading data on refresh
                 window.history.replaceState({}, document.title, window.location.pathname);
             } catch (error) {
                 console.error("Failed to load data from URL.", error);
             }
         }
         
-        // If no data from URL, try localStorage
         if (initialUsers.length === 0) {
             try {
                 const storedUsers = localStorage.getItem(USER_STORAGE_KEY);
@@ -65,7 +69,6 @@ const App: React.FC = () => {
             }
         }
 
-        // If still no data, create a default user
         if (initialUsers.length === 0) {
              const defaultUser: User = {
                 id: `user${Date.now()}`,
@@ -81,21 +84,18 @@ const App: React.FC = () => {
         setIsLoading(false);
     }, []);
 
-    // Save users to localStorage whenever they change
     useEffect(() => {
         if (!isLoading) {
            localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(users));
         }
     }, [users, isLoading]);
     
-    // Modal states
     const [isRewardModalOpen, setRewardModalOpen] = useState(false);
     const [isAddTradeModalOpen, setAddTradeModalOpen] = useState(false);
     const [isUpdateTradeModalOpen, setUpdateTradeModalOpen] = useState(false);
     const [isUserModalOpen, setUserModalOpen] = useState(false);
     const [isShareModalOpen, setShareModalOpen] = useState(false);
 
-    // Form states
     const [newReward, setNewReward] = useState({ tokenName: '', quantity: '', value: '' });
     const [newTrade, setNewTrade] = useState({ tokenName: '', initialVolume: '', initialFee: '', rewardQuantity: '', value: '' });
     const [dailyEntry, setDailyEntry] = useState({ volume: '', fee: '' });
@@ -213,8 +213,8 @@ const App: React.FC = () => {
 
     const handleGenerateShareLink = () => {
         if (users.length === 0) return;
-        // Safely encode to Base64, supporting Unicode characters from user input.
-        const encodedData = btoa(encodeURIComponent(JSON.stringify(users)));
+        const dataStr = JSON.stringify(users);
+        const encodedData = btoa(unescape(encodeURIComponent(dataStr)));
         const url = `${window.location.origin}${window.location.pathname}?data=${encodedData}`;
         setShareableLink(url);
         setShareModalOpen(true);
@@ -228,6 +228,42 @@ const App: React.FC = () => {
             setCopySuccess('Lỗi');
         });
     };
+    
+    const handleGenerateSnapshot = useCallback(() => {
+        if (!activeUser) {
+            alert("Vui lòng chọn một portfolio để chụp ảnh.");
+            return;
+        }
+        setIsSnapshotting(true);
+    }, [activeUser]);
+
+    useEffect(() => {
+        if (isSnapshotting && snapshotRef.current && activeUser) {
+            setTimeout(() => {
+                htmlToImage.toPng(snapshotRef.current!, {
+                    cacheBust: true,
+                    pixelRatio: 2,
+                    backgroundColor: '#111827',
+                })
+                .then((dataUrl) => {
+                    const link = document.createElement('a');
+                    const portfolioName = activeUser.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                    const date = new Date().toISOString().split('T')[0];
+                    link.download = `${portfolioName || 'portfolio'}_snapshot_${date}.png`;
+                    link.href = dataUrl;
+                    link.click();
+                })
+                .catch((err) => {
+                    console.error('Lỗi khi tạo ảnh snapshot:', err);
+                    alert('Đã xảy ra lỗi khi tạo ảnh. Vui lòng thử lại.');
+                })
+                .finally(() => {
+                    setIsSnapshotting(false);
+                });
+            }, 100);
+        }
+    }, [isSnapshotting, activeUser]);
+
 
     const alphaRewardColumns = [
         { key: 'tokenName' as keyof AlphaReward, header: 'Tên Token' },
@@ -286,6 +322,9 @@ const App: React.FC = () => {
                                     <button onClick={handleGenerateShareLink} className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 px-4 rounded-lg transition-colors">
                                         <ShareIcon className="w-5 h-5"/> Lưu & Di chuyển
                                     </button>
+                                    <button onClick={handleGenerateSnapshot} className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-4 rounded-lg transition-colors">
+                                        <CameraIcon className="w-5 h-5"/> Chụp ảnh
+                                    </button>
                                 </>
                             )}
                         </div>
@@ -332,7 +371,6 @@ const App: React.FC = () => {
                     )}
                 </main>
 
-                {/* Modals */}
                 <Modal isOpen={isShareModalOpen} onClose={() => { setShareModalOpen(false); setCopySuccess(''); }} title="Lưu & Di chuyển Dữ liệu">
                     <div className="space-y-4">
                         <p className="text-sm text-gray-400">Sao chép và sử dụng liên kết này để truy cập và chỉnh sửa dữ liệu của bạn trên một thiết bị khác. Liên kết này chứa toàn bộ dữ liệu hiện tại của bạn.</p>
@@ -389,6 +427,13 @@ const App: React.FC = () => {
                     </form>
                 </Modal>
             </div>
+            {isSnapshotting && activeUser && (
+                <div style={{ position: 'fixed', left: '-9999px', top: '0px', zIndex: -1, fontFamily: 'sans-serif' }}>
+                    <div ref={snapshotRef}>
+                        <Snapshot user={activeUser} totalValue={totalValue} />
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
