@@ -1,4 +1,3 @@
-
 import React from 'react';
 import TrashIcon from './icons/TrashIcon';
 import EditIcon from './icons/EditIcon';
@@ -12,10 +11,10 @@ interface PortfolioTableProps<T> {
 }
 
 const formatCurrency = (value: number) => {
-    return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `$${value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
-const PortfolioTable = <T extends { id: string }>({ items, columns, onDeleteItem, onUpdateItem, emptyStateMessage }: PortfolioTableProps<T>) => {
+const PortfolioTable = <T extends { id: string; value?: number }>({ items, columns, onDeleteItem, onUpdateItem, emptyStateMessage }: PortfolioTableProps<T>) => {
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm text-left text-gray-400">
@@ -40,11 +39,23 @@ const PortfolioTable = <T extends { id: string }>({ items, columns, onDeleteItem
             items.map((item) => (
               <tr key={item.id} className="bg-gray-800 border-b border-gray-700 hover:bg-gray-700/50 transition-colors">
                 {columns.map((col) => {
-                  const value = item[col.key];
+                  const cellValue = item[col.key];
                   const key = String(col.key);
+
+                  if (key === 'value' && typeof cellValue === 'number') {
+                    const numericValue = cellValue;
+                    const colorClass = numericValue >= 0 ? 'text-green-400' : 'text-red-400';
+                    
+                    return (
+                      <td key={key} className={`px-6 py-4 font-mono text-right ${colorClass}`}>
+                        {formatCurrency(numericValue)}
+                      </td>
+                    );
+                  }
+
                   return (
                     <td key={key} className={`px-6 py-4 ${col.isNumeric ? 'text-right font-mono' : 'font-medium text-white'}`}>
-                      {typeof value === 'number' ? (key.toLowerCase().includes('value') || key.toLowerCase().includes('fee') || key.toLowerCase().includes('volume') ? formatCurrency(value) : value.toLocaleString('en-US')) : String(value)}
+                      {typeof cellValue === 'number' ? (key.toLowerCase().includes('fee') || key.toLowerCase().includes('volume') || key.toLowerCase().includes('price') ? formatCurrency(cellValue) : cellValue.toLocaleString('en-US', { maximumFractionDigits: 0 })) : String(cellValue)}
                     </td>
                   );
                 })}

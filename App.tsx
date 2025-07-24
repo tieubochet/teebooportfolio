@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import * as htmlToImage from 'html-to-image';
 import { AlphaReward, TradeEvent, User } from './types';
@@ -13,7 +14,7 @@ const USER_STORAGE_KEY = 'portfolio-tracker-users';
 
 // Helper to format currency
 const formatCurrency = (value: number) => {
-    return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `$${value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
 // Input field component
@@ -69,6 +70,16 @@ const App: React.FC = () => {
             }
         }
 
+        // Data migration: ensure all trade events have a sellPrice
+        initialUsers = initialUsers.map(user => ({
+            ...user,
+            tradeEvents: user.tradeEvents.map((event: any) => ({
+                ...event,
+                sellPrice: event.sellPrice ?? 0,
+            })),
+        }));
+
+
         if (initialUsers.length === 0) {
              const defaultUser: User = {
                 id: `user${Date.now()}`,
@@ -97,13 +108,13 @@ const App: React.FC = () => {
     const [isShareModalOpen, setShareModalOpen] = useState(false);
 
     const [newReward, setNewReward] = useState({ tokenName: '', quantity: '', value: '' });
-    const [newTrade, setNewTrade] = useState({ tokenName: '', initialVolume: '', initialFee: '', rewardQuantity: '', value: '' });
+    const [newTrade, setNewTrade] = useState({ tokenName: '', initialVolume: '', initialFee: '', sellPrice: '', rewardQuantity: '' });
     const [editingTradeData, setEditingTradeData] = useState({
         tokenName: '',
         totalVolume: '',
         totalTradeFee: '',
+        sellPrice: '',
         rewardQuantity: '',
-        value: ''
     });
     const [currentTradeEventId, setCurrentTradeEventId] = useState<string | null>(null);
     const [newUserName, setNewUserName] = useState('');
@@ -141,19 +152,24 @@ const App: React.FC = () => {
 
     const handleAddTrade = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!activeUserId || !newTrade.tokenName || !newTrade.initialVolume || !newTrade.initialFee || !newTrade.rewardQuantity || !newTrade.value) return;
+        if (!activeUserId || !newTrade.tokenName || !newTrade.initialVolume || !newTrade.initialFee || !newTrade.rewardQuantity || !newTrade.sellPrice) return;
+
+        const sellPrice = parseFloat(newTrade.sellPrice);
+        const initialFee = parseFloat(newTrade.initialFee);
+        const calculatedValue = sellPrice - initialFee;
 
         const newTradeItem: TradeEvent = {
             id: `te${Date.now()}`,
             tokenName: newTrade.tokenName,
             totalVolume: parseFloat(newTrade.initialVolume),
-            totalTradeFee: parseFloat(newTrade.initialFee),
+            totalTradeFee: initialFee,
+            sellPrice: sellPrice,
             rewardQuantity: parseFloat(newTrade.rewardQuantity),
-            value: parseFloat(newTrade.value)
+            value: calculatedValue
         };
         
         updateUser(activeUserId, user => ({ ...user, tradeEvents: [...user.tradeEvents, newTradeItem]}));
-        setNewTrade({ tokenName: '', initialVolume: '', initialFee: '', rewardQuantity: '', value: '' });
+        setNewTrade({ tokenName: '', initialVolume: '', initialFee: '', sellPrice: '', rewardQuantity: '' });
         setAddTradeModalOpen(false);
     };
 
@@ -165,8 +181,8 @@ const App: React.FC = () => {
                 tokenName: tradeToUpdate.tokenName,
                 totalVolume: String(tradeToUpdate.totalVolume),
                 totalTradeFee: String(tradeToUpdate.totalTradeFee),
+                sellPrice: String(tradeToUpdate.sellPrice || 0),
                 rewardQuantity: String(tradeToUpdate.rewardQuantity),
-                value: String(tradeToUpdate.value),
             });
             setUpdateTradeModalOpen(true);
         }
@@ -176,13 +192,18 @@ const App: React.FC = () => {
         e.preventDefault();
         if (!activeUserId || !currentTradeEventId) return;
 
+        const sellPrice = parseFloat(editingTradeData.sellPrice) || 0;
+        const totalTradeFee = parseFloat(editingTradeData.totalTradeFee) || 0;
+        const calculatedValue = sellPrice - totalTradeFee;
+
         const updatedEvent: TradeEvent = {
             id: currentTradeEventId,
             tokenName: editingTradeData.tokenName,
             totalVolume: parseFloat(editingTradeData.totalVolume) || 0,
-            totalTradeFee: parseFloat(editingTradeData.totalTradeFee) || 0,
+            totalTradeFee: totalTradeFee,
+            sellPrice: sellPrice,
             rewardQuantity: parseFloat(editingTradeData.rewardQuantity) || 0,
-            value: parseFloat(editingTradeData.value) || 0,
+            value: calculatedValue,
         };
 
         updateUser(activeUserId, user => ({
@@ -293,6 +314,7 @@ const App: React.FC = () => {
         { key: 'tokenName' as keyof TradeEvent, header: 'Tên Token' },
         { key: 'totalVolume' as keyof TradeEvent, header: 'Tổng Volume', isNumeric: true },
         { key: 'totalTradeFee' as keyof TradeEvent, header: 'Tổng Phí Trade', isNumeric: true },
+        { key: 'sellPrice' as keyof TradeEvent, header: 'Giá bán', isNumeric: true },
         { key: 'rewardQuantity' as keyof TradeEvent, header: 'Số Lượng Thưởng', isNumeric: true },
         { key: 'value' as keyof TradeEvent, header: 'Thành Tiền', isNumeric: true },
     ];
@@ -350,6 +372,9 @@ const App: React.FC = () => {
                    
                     {activeUser && (
                          <div className="mt-6 border-t border-gray-700 pt-4">
+                            <p className="text-lg text-gray-400">
+                                {`Tổng giá trị:`}
+                            </p>
                             <p className="text-4xl font-extrabold text-green-400 tracking-tight">{formatCurrency(totalValue)}</p>
                         </div>
                     )}
@@ -367,7 +392,7 @@ const App: React.FC = () => {
                             <div className="flex justify-between items-center p-4 bg-gray-700/50">
                                 <h2 className="text-xl font-semibold text-white">Các giải thưởng Alpha</h2>
                                 <button onClick={() => setRewardModalOpen(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-transform transform hover:scale-105">
-                                    <PlusIcon className="w-5 h-5" /> Thêm
+                                    <PlusIcon className="w-5 h-5" /> Thêm mới
                                 </button>
                             </div>
                             <PortfolioTable items={activeUser.alphaRewards} columns={alphaRewardColumns} onDeleteItem={deleteReward} emptyStateMessage="Chưa có giải thưởng nào." />
@@ -377,7 +402,7 @@ const App: React.FC = () => {
                             <div className="flex justify-between items-center p-4 bg-gray-700/50">
                                 <h2 className="text-xl font-semibold text-white">Event Trade</h2>
                                 <button onClick={() => setAddTradeModalOpen(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-transform transform hover:scale-105">
-                                <PlusIcon className="w-5 h-5" /> Thêm
+                                <PlusIcon className="w-5 h-5" /> Thêm mới
                                 </button>
                             </div>
                             <PortfolioTable items={activeUser.tradeEvents} columns={tradeEventColumns} onDeleteItem={deleteTrade} onUpdateItem={handleOpenUpdateModal} emptyStateMessage="Chưa có sự kiện trade nào."/>
@@ -428,8 +453,8 @@ const App: React.FC = () => {
                         <InputField label="Tên Token" id="trade-token" type="text" value={newTrade.tokenName} onChange={(e) => setNewTrade({ ...newTrade, tokenName: e.target.value })} required />
                         <InputField label="Volume ban đầu ($)" id="trade-initial-volume" type="number" step="any" min="0" value={newTrade.initialVolume} onChange={(e) => setNewTrade({ ...newTrade, initialVolume: e.target.value })} required />
                         <InputField label="Phí Trade ban đầu ($)" id="trade-initial-fee" type="number" step="any" min="0" value={newTrade.initialFee} onChange={(e) => setNewTrade({ ...newTrade, initialFee: e.target.value })} required />
+                        <InputField label="Giá bán ($)" id="trade-sell-price" type="number" step="any" min="0" value={newTrade.sellPrice} onChange={(e) => setNewTrade({ ...newTrade, sellPrice: e.target.value })} required />
                         <InputField label="Số lượng thưởng" id="trade-reward-qty" type="number" step="any" min="0" value={newTrade.rewardQuantity} onChange={(e) => setNewTrade({ ...newTrade, rewardQuantity: e.target.value })} required />
-                        <InputField label="Thành tiền ($)" id="trade-value" type="number" step="any" min="0" value={newTrade.value} onChange={(e) => setNewTrade({ ...newTrade, value: e.target.value })} required />
                         <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg transition">Thêm Event</button>
                     </form>
                 </Modal>
@@ -439,8 +464,8 @@ const App: React.FC = () => {
                         <InputField label="Tên Token" id="edit-trade-token" type="text" value={editingTradeData.tokenName} onChange={(e) => setEditingTradeData({ ...editingTradeData, tokenName: e.target.value })} required />
                         <InputField label="Tổng Volume ($)" id="edit-trade-total-volume" type="number" step="any" min="0" value={editingTradeData.totalVolume} onChange={(e) => setEditingTradeData({ ...editingTradeData, totalVolume: e.target.value })} required />
                         <InputField label="Tổng Phí Trade ($)" id="edit-trade-total-fee" type="number" step="any" min="0" value={editingTradeData.totalTradeFee} onChange={(e) => setEditingTradeData({ ...editingTradeData, totalTradeFee: e.target.value })} required />
+                        <InputField label="Giá bán ($)" id="edit-trade-sell-price" type="number" step="any" min="0" value={editingTradeData.sellPrice} onChange={(e) => setEditingTradeData({ ...editingTradeData, sellPrice: e.target.value })} required />
                         <InputField label="Số lượng thưởng" id="edit-trade-reward-qty" type="number" step="any" min="0" value={editingTradeData.rewardQuantity} onChange={(e) => setEditingTradeData({ ...editingTradeData, rewardQuantity: e.target.value })} required />
-                        <InputField label="Thành tiền ($)" id="edit-trade-value" type="number" step="any" min="0" value={editingTradeData.value} onChange={(e) => setEditingTradeData({ ...editingTradeData, value: e.target.value })} required />
                         <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg transition">Lưu thay đổi</button>
                     </form>
                 </Modal>

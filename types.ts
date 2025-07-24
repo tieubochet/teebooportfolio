@@ -11,6 +11,7 @@ export interface TradeEvent {
   tokenName: string;
   totalVolume: number;
   totalTradeFee: number;
+  sellPrice: number;
   rewardQuantity: number;
   value: number;
 }

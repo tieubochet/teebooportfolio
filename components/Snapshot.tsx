@@ -7,11 +7,10 @@ interface SnapshotProps {
 }
 
 const formatCurrency = (value: number) => {
-    return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `$${value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
 const Snapshot: React.FC<SnapshotProps> = ({ user, totalValue }) => {
-    // Only include the requested columns from the user prompt
     const alphaRewardColumns = [
         { key: 'tokenName' as keyof AlphaReward, header: 'Tên Token' },
         { key: 'quantity' as keyof AlphaReward, header: 'Số Lượng Nhận', isNumeric: true },
@@ -20,7 +19,8 @@ const Snapshot: React.FC<SnapshotProps> = ({ user, totalValue }) => {
     
     const tradeEventColumns = [
         { key: 'tokenName' as keyof TradeEvent, header: 'Tên Token' },
-        { key: 'rewardQuantity' as keyof TradeEvent, header: 'Số Lượng Thưởng', isNumeric: true },
+        { key: 'sellPrice' as keyof TradeEvent, header: 'Giá bán', isNumeric: true },
+        { key: 'totalTradeFee' as keyof TradeEvent, header: 'Phí Trade', isNumeric: true },
         { key: 'value' as keyof TradeEvent, header: 'Thành Tiền', isNumeric: true },
     ];
     
@@ -57,10 +57,17 @@ const Snapshot: React.FC<SnapshotProps> = ({ user, totalValue }) => {
                             {user.alphaRewards.length > 0 ? user.alphaRewards.map(item => (
                                 <tr key={item.id} className="border-b border-gray-700 last:border-b-0">
                                     {alphaRewardColumns.map(col => {
-                                        const value = item[col.key];
+                                        const cellValue = item[col.key];
+                                        if (col.key === 'value' && typeof cellValue === 'number') {
+                                            return (
+                                                <td key={String(col.key)} className={`px-6 py-4 text-right font-mono text-green-400`}>
+                                                   {formatCurrency(cellValue)}
+                                                </td>
+                                            );
+                                        }
                                         return (
                                             <td key={String(col.key)} className={`px-6 py-4 ${col.isNumeric ? 'text-right font-mono' : 'font-medium text-white'}`}>
-                                                {typeof value === 'number' ? (col.key === 'value' ? formatCurrency(value) : value.toLocaleString('en-US')) : String(value)}
+                                                {typeof cellValue === 'number' ? cellValue.toLocaleString('en-US', { maximumFractionDigits: 0 }) : String(cellValue)}
                                             </td>
                                         )
                                     })}
@@ -88,10 +95,23 @@ const Snapshot: React.FC<SnapshotProps> = ({ user, totalValue }) => {
                              {user.tradeEvents.length > 0 ? user.tradeEvents.map(item => (
                                 <tr key={item.id} className="border-b border-gray-700 last:border-b-0">
                                      {tradeEventColumns.map(col => {
-                                        const value = item[col.key];
+                                        const cellValue = item[col.key as keyof TradeEvent];
+                                        
+                                        if (col.key === 'value' && typeof cellValue === 'number') {
+                                            const numericValue = cellValue;
+                                            const colorClass = numericValue >= 0 ? 'text-green-400' : 'text-red-400';
+                                            
+                                            return (
+                                                <td key={String(col.key)} className={`px-6 py-4 text-right font-mono ${colorClass}`}>
+                                                    {formatCurrency(numericValue)}
+                                                </td>
+                                            );
+                                        }
+
+                                        const isCurrency = col.key === 'sellPrice' || col.key === 'totalTradeFee';
                                         return (
                                             <td key={String(col.key)} className={`px-6 py-4 ${col.isNumeric ? 'text-right font-mono' : 'font-medium text-white'}`}>
-                                                {typeof value === 'number' ? (col.key === 'value' ? formatCurrency(value) : value.toLocaleString('en-US')) : String(value)}
+                                                {typeof cellValue === 'number' ? (isCurrency ? formatCurrency(cellValue) : cellValue.toLocaleString('en-US', { maximumFractionDigits: 0 })) : String(cellValue)}
                                             </td>
                                         )
                                     })}
