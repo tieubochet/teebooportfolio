@@ -367,7 +367,7 @@ const App: React.FC = () => {
                             <div className="flex justify-between items-center p-4 bg-gray-700/50">
                                 <h2 className="text-xl font-semibold text-white">Các giải thưởng Alpha</h2>
                                 <button onClick={() => setRewardModalOpen(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-transform transform hover:scale-105">
-                                    <PlusIcon className="w-5 h-5" /> Thêm mới
+                                    <PlusIcon className="w-5 h-5" /> Thêm
                                 </button>
                             </div>
                             <PortfolioTable items={activeUser.alphaRewards} columns={alphaRewardColumns} onDeleteItem={deleteReward} emptyStateMessage="Chưa có giải thưởng nào." />
@@ -377,7 +377,7 @@ const App: React.FC = () => {
                             <div className="flex justify-between items-center p-4 bg-gray-700/50">
                                 <h2 className="text-xl font-semibold text-white">Event Trade</h2>
                                 <button onClick={() => setAddTradeModalOpen(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-transform transform hover:scale-105">
-                                <PlusIcon className="w-5 h-5" /> Thêm mới
+                                <PlusIcon className="w-5 h-5" /> Thêm
                                 </button>
                             </div>
                             <PortfolioTable items={activeUser.tradeEvents} columns={tradeEventColumns} onDeleteItem={deleteTrade} onUpdateItem={handleOpenUpdateModal} emptyStateMessage="Chưa có sự kiện trade nào."/>
