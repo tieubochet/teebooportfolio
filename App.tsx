@@ -333,7 +333,7 @@ const App: React.FC = () => {
                     {activeUser && (
                          <div className="mt-6 border-t border-gray-700 pt-4">
                             <p className="text-lg text-gray-400">
-                                {`Tổng giá trị của "${activeUser.name}":`}
+                                {`Tổng giá trị`}
                             </p>
                             <p className="text-4xl font-extrabold text-green-400 tracking-tight">{formatCurrency(totalValue)}</p>
                         </div>
