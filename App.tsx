@@ -312,15 +312,15 @@ const App: React.FC = () => {
                                 ))}
                             </select>
                             <button onClick={() => setUserModalOpen(true)} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-lg transition-colors">
-                                <PlusIcon className="w-5 h-5" /> Thêm Portfolio
+                                <PlusIcon className="w-5 h-5" /> Thêm
                             </button>
                             {activeUserId && (
                                 <>
                                     <button onClick={handleDeleteCurrentUser} className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-4 rounded-lg transition-colors">
-                                        <TrashIcon className="w-5 h-5"/> Xóa Portfolio
+                                        <TrashIcon className="w-5 h-5"/> Xóa
                                     </button>
                                     <button onClick={handleGenerateShareLink} className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 px-4 rounded-lg transition-colors">
-                                        <ShareIcon className="w-5 h-5"/> Lưu & Di chuyển
+                                        <ShareIcon className="w-5 h-5"/> Lưu
                                     </button>
                                     <button onClick={handleGenerateSnapshot} className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-4 rounded-lg transition-colors">
                                         <CameraIcon className="w-5 h-5"/> Chụp ảnh
